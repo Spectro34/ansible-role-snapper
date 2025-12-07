@@ -1,6 +1,32 @@
 ---
-- name: install dependencies
+- name: Check if snapper is already installed
+  ansible.builtin.command:
+    cmd: "which snapper"
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  register: snapper_installed_check
+
+- name: Install dependencies
   ansible.builtin.package:
     name: "{{ item }}"
-    state: "present"
+    state: present
   loop: "{{ __snapper_dependencies }}"
+  loop_control:
+    label: "{{ item }}"
+  when: snapper_installed_check.rc != 0 or ansible_check_mode
+
+- name: Verify snapper installation
+  ansible.builtin.command:
+    cmd: "snapper --version"
+  changed_when: false
+  failed_when: false
+  register: snapper_version_check
+  when: not ansible_check_mode
+
+- name: Display snapper version
+  ansible.builtin.debug:
+    msg: "Snapper version: {{ snapper_version_check.stdout | default('unknown') }}"
+  when:
+    - not ansible_check_mode
+    - snapper_version_check.rc == 0

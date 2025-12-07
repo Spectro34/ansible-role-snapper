@@ -1,24 +1,40 @@
 ---
-- name: create snapper templates
+- name: Ensure snapper config-templates directory exists
+  ansible.builtin.file:
+    path: /etc/snapper/config-templates
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: snapper_templates | length > 0
+
+- name: Create snapper templates
   ansible.builtin.template:
     src: snapper-config.j2
     dest: "/etc/snapper/config-templates/{{ item.key }}"
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
     lstrip_blocks: true
   vars:
     cfg: "{{ item.value }}"
-  with_dict: "{{ snapper_templates }}"
+  loop: "{{ snapper_templates | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: snapper_templates | length > 0
 
-- name: include configuration creation tasks
+- name: Include configuration creation tasks
   ansible.builtin.include_tasks: create_config.yml
   loop: "{{ snapper_configs }}"
   loop_control:
     loop_var: config
+    label: "{{ config.name }}"
+  when: snapper_configs | length > 0
 
-- name: include configuration deletion tasks
+- name: Include configuration deletion tasks
   ansible.builtin.include_tasks: delete_config.yml
   loop: "{{ snapper_configs_absent }}"
   loop_control:
     loop_var: config_name
+    label: "{{ config_name }}"
+  when: snapper_configs_absent | length > 0

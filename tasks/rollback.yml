@@ -1,0 +1,46 @@
+---
+# Rollback operations
+
+- name: List snapshots before rollback to validate existence
+  ansible.builtin.command:
+    cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      list --columns number
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  register: snapshot_list_for_rollback
+  vars:
+    _snapshot_num: "{{ item.number | default(item.snapshot) }}"
+  loop: "{{ snapper_rollbacks }}"
+  loop_control:
+    label: "{{ _snapshot_num }}"
+  when: snapper_rollbacks | length > 0
+  tags:
+    - snapper
+    - snapper_rollback
+
+- name: Rollback to snapshot
+  ansible.builtin.command:
+    cmd: "{{ _snapper_rollback_cmd }}"
+  vars:
+    _snapper_rollback_cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      rollback {{ item.number | default(item.snapshot) }}
+      {%- if item.description is defined %} --description "{{ item.description }}"{% endif %}
+      {%- if item.cleanup is defined %} --cleanup-algorithm {{ item.cleanup }}{% endif %}
+    _snapshot_num: "{{ item.number | default(item.snapshot) }}"
+  register: snapper_rollback_result
+  changed_when: true
+  failed_when: >
+    (_snapshot_num | string) in (snapshot_list_for_rollback.stdout | default('')) and
+    snapper_rollback_result.rc != 0
+  loop: "{{ snapper_rollbacks }}"
+  loop_control:
+    label: "{{ item.number | default(item.snapshot) }}"
+  when:
+    - snapper_rollbacks | length > 0
+    - (item.number | default(item.snapshot) | string) in (snapshot_list_for_rollback.stdout | default(''))
+  tags:
+    - snapper
+    - snapper_rollback

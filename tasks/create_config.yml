@@ -1,23 +1,44 @@
 ---
-- name: check if configuration '{{ config.name }}' exists
-  ansible.builtin.command: "snapper -c {{ config.name }} get-config"
+- name: Ensure snapper configs directory exists
+  ansible.builtin.file:
+    path: /etc/snapper/configs
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check if configuration exists
+  vars:
+    _config_name: "{{ config.name }}"
+  ansible.builtin.command:
+    cmd: "snapper -c {{ _config_name }} get-config"
   changed_when: false
   failed_when: false
   check_mode: false
   register: config_exists_status
 
-- name: initialize configuration '{{ config.name }}'
-  ansible.builtin.command: "snapper --config '{{ config.name }}' create-config '{{ config.path }}'"
+- name: Initialize configuration
+  ansible.builtin.command:
+    cmd: "snapper --config '{{ _config_name }}' create-config '{{ config.path }}'"
+  vars:
+    _config_name: "{{ config.name }}"
   changed_when: true
   when: config_exists_status.rc == 1
+  register: config_create_result
+  failed_when: >
+    config_create_result.rc != 0 and
+    "already exists" not in config_create_result.stderr | default("")
 
-- name: change configuration '{{ config.name }}'
+- name: Change configuration
   ansible.builtin.template:
     src: snapper-config.j2
-    dest: "/etc/snapper/configs/{{ config.name }}"
+    dest: "/etc/snapper/configs/{{ _config_name }}"
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
+    validate: "snapper -c {{ _config_name }} get-config"
   vars:
+    _config_name: "{{ config.name }}"
     cfg: "{{ config.vars }}"
     path: "{{ config.path }}"
+  when: config_exists_status.rc == 0 or (config_create_result is defined and config_create_result is succeeded)

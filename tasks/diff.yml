@@ -1,0 +1,86 @@
+---
+# Diff and status operations
+
+- name: List snapshots before diff to validate existence
+  ansible.builtin.command:
+    cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      list --columns number
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  register: snapshot_list_for_diff
+  loop: "{{ snapper_diffs | default([]) }}"
+  loop_control:
+    label: "{{ item.snapshot1 }} vs {{ item.snapshot2 }}"
+  when: snapper_diffs is defined and snapper_diffs | length > 0
+  tags:
+    - snapper
+    - snapper_diff
+
+- name: Show differences between snapshots
+  ansible.builtin.command:
+    cmd: "{{ _snapper_diff_cmd }}"
+  vars:
+    _snapper_diff_cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      diff {{ item.snapshot1 }} {{ item.snapshot2 }}
+      {%- if item.files is defined %} {{ item.files | join(' ') }}{% endif %}
+  register: snapper_diff_result
+  changed_when: false
+  failed_when: >
+    ((item.snapshot1 | string) in (snapshot_list_for_diff.stdout | default('')) and
+     (item.snapshot2 | string) in (snapshot_list_for_diff.stdout | default(''))) and
+    snapper_diff_result.rc != 0
+  loop: "{{ snapper_diffs | default([]) }}"
+  loop_control:
+    label: "{{ item.snapshot1 }} vs {{ item.snapshot2 }}"
+  when:
+    - snapper_diffs is defined and snapper_diffs | length > 0
+    - (item.snapshot1 | string) in (snapshot_list_for_diff.stdout | default(''))
+    - (item.snapshot2 | string) in (snapshot_list_for_diff.stdout | default(''))
+  tags:
+    - snapper
+    - snapper_diff
+
+- name: List snapshots before status to validate existence
+  ansible.builtin.command:
+    cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      list --columns number
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  register: snapshot_list_for_status
+  loop: "{{ snapper_status | default([]) }}"
+  loop_control:
+    label: "{{ item.snapshot1 }} vs {{ item.snapshot2 }}"
+  when: snapper_status is defined and snapper_status | length > 0
+  tags:
+    - snapper
+    - snapper_status
+
+- name: Show status between snapshots
+  ansible.builtin.command:
+    cmd: "{{ _snapper_status_cmd }}"
+  vars:
+    _snapper_status_cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      status {{ item.snapshot1 }} {{ item.snapshot2 }}
+      {%- if item.files is defined %} {{ item.files | join(' ') }}{% endif %}
+  register: snapper_status_result
+  changed_when: false
+  failed_when: >
+    ((item.snapshot1 | string) in (snapshot_list_for_status.stdout | default('')) and
+     (item.snapshot2 | string) in (snapshot_list_for_status.stdout | default(''))) and
+    snapper_status_result.rc != 0
+  loop: "{{ snapper_status | default([]) }}"
+  loop_control:
+    label: "{{ item.snapshot1 }} vs {{ item.snapshot2 }}"
+  when:
+    - snapper_status is defined and snapper_status | length > 0
+    - (item.snapshot1 | string) in (snapshot_list_for_status.stdout | default(''))
+    - (item.snapshot2 | string) in (snapshot_list_for_status.stdout | default(''))
+  tags:
+    - snapper
+    - snapper_status

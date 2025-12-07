@@ -1,14 +1,140 @@
 ---
-- name: include installation tasks
-  tags: [snapper, snapper_install]
+- name: Set validation variables
+  ansible.builtin.set_fact:
+    _snapper_configs: "{{ snapper_configs | default([]) }}"
+    _snapper_snapshots_delete: "{{ snapper_snapshots_delete | default([]) }}"
+    _snapper_rollbacks: "{{ snapper_rollbacks | default([]) }}"
+    _snapper_hooks: "{{ snapper_hooks | default([]) }}"
+  tags:
+    - snapper
+    - validation
+
+- name: Validate snapper_configs structure
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+      - item.path is defined
+      - item.path | length > 0
+    fail_msg: >
+      Invalid snapper_configs item: Each item must have both 'name' and 'path' defined.
+      Item provided: {{ item | to_nice_json }}
+      Example valid format:
+        - name: config-name
+          path: /path/to/subvolume
+          vars: {}
+    success_msg: "Configuration is valid"
+  loop: "{{ _snapper_configs }}"
+  loop_control:
+    label: "{{ item.name | default('unnamed') }}"
+  when: _snapper_configs | length > 0
+  tags:
+    - snapper
+    - snapper_config
+    - validation
+
+- name: Validate snapper_snapshots_delete structure
+  ansible.builtin.assert:
+    that:
+      - item.number is defined
+      - item.number | type_debug == "int" or item.number | type_debug == "str"
+    fail_msg: >
+      Invalid snapper_snapshots_delete item: Each item must have 'number' defined.
+      Item provided: {{ item | to_nice_json }}
+      Example valid format:
+        - number: 1
+          config: config-name
+    success_msg: "Delete snapshot is valid"
+  loop: "{{ _snapper_snapshots_delete }}"
+  loop_control:
+    label: "{{ item.number | default('unknown') }}"
+  when: _snapper_snapshots_delete | length > 0
+  tags:
+    - snapper
+    - snapper_snapshots
+    - validation
+
+- name: Validate snapper_rollbacks structure
+  ansible.builtin.assert:
+    that:
+      - item.number is defined or item.snapshot is defined
+    fail_msg: >
+      Invalid snapper_rollbacks item: Each item must have either 'number' or 'snapshot' defined.
+      Item provided: {{ item | to_nice_json }}
+      Example valid formats:
+        - number: 5
+          config: config-name
+        - snapshot: 10
+    success_msg: "Rollback operation is valid"
+  loop: "{{ _snapper_rollbacks }}"
+  when: _snapper_rollbacks | length > 0
+  tags:
+    - snapper
+    - snapper_rollback
+    - validation
+
+- name: Validate snapper_hooks structure
+  ansible.builtin.assert:
+    that:
+      - item.config is defined
+      - item.type is defined
+      - item.type in ['pre', 'post']
+      - item.script is defined
+    fail_msg: >
+      Invalid snapper_hooks item: Each item must have 'config', 'type' (must be 'pre' or 'post'), and 'script' defined.
+      Item provided: {{ item | to_nice_json }}
+      Example valid format:
+        - config: config-name
+          type: pre
+          script: /path/to/script.sh
+    success_msg: "Hook '{{ item.type }}' for '{{ item.config }}' is valid"
+  loop: "{{ _snapper_hooks }}"
+  when: _snapper_hooks | length > 0
+  tags:
+    - snapper
+    - snapper_hooks
+    - validation
+
+- name: Include installation tasks
+  tags:
+    - snapper
+    - snapper_install
   ansible.builtin.import_tasks: install.yml
 
-- name: include configuration tasks
-  tags: [snapper, snapper_config]
+- name: Include configuration tasks
+  tags:
+    - snapper
+    - snapper_config
   ansible.builtin.import_tasks: configure.yml
 
-- name: manage Snapper timers
-  tags: [snapper, snapper_service]
+- name: Include snapshot management tasks
+  tags:
+    - snapper
+    - snapper_snapshots
+  ansible.builtin.import_tasks: snapshots.yml
+
+- name: Include rollback tasks
+  tags:
+    - snapper
+    - snapper_rollback
+  ansible.builtin.import_tasks: rollback.yml
+
+- name: Include diff and status tasks
+  tags:
+    - snapper
+    - snapper_diff
+  ansible.builtin.import_tasks: diff.yml
+
+- name: Include hooks management tasks
+  tags:
+    - snapper
+    - snapper_hooks
+  ansible.builtin.import_tasks: hooks.yml
+
+- name: Manage Snapper timers
+  tags:
+    - snapper
+    - snapper_service
   ansible.builtin.systemd:
     name: "{{ timer.name }}"
     enabled: "{{ timer.enabled }}"

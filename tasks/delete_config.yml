@@ -1,12 +1,14 @@
 ---
-- name: check if configuration '{{ config_name }}' exists
-  ansible.builtin.command: "snapper -c {{ config_name }} get-config"
+- name: Check if configuration exists
+  ansible.builtin.command:
+    cmd: "snapper -c {{ config_name }} get-config"
   changed_when: false
   failed_when: false
   check_mode: false
   register: config_exists_status
 
-- name: delete the configuration '{{ config_name }}'
-  ansible.builtin.command: "snapper --config {{ config_name }} delete-config"
+- name: Delete the configuration
+  ansible.builtin.command:
+    cmd: "snapper --config {{ config_name }} delete-config"
   changed_when: true
   when: config_exists_status.rc == 0

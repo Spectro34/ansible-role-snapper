@@ -1,0 +1,99 @@
+---
+# Snapshot management tasks
+
+- name: Check if configuration exists before creating snapshot
+  ansible.builtin.command:
+    cmd: "snapper{%- if item.config is defined %} -c {{ item.config }}{% endif %} get-config"
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  register: config_exists_for_snapshot
+  loop: "{{ snapper_snapshots }}"
+  loop_control:
+    label: "{{ item.config | default('default') }}"
+  when: snapper_snapshots | length > 0
+  tags:
+    - snapper
+    - snapper_snapshots
+
+- name: Create snapshots
+  ansible.builtin.command:
+    cmd: "{{ _snapper_create_cmd }}"
+  vars:
+    _snapper_create_cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      create{%- if item.description is defined %} --description "{{ item.description }}"{% endif %}
+      {%- if item.cleanup is defined %} --cleanup-algorithm {{ item.cleanup }}{% endif %}
+      {%- if item.userdata is defined %} --userdata "{{ item.userdata }}"{% endif %}
+      {%- if item.read_only | default(false) %} --read-only{% endif %}
+      {%- if item.type is defined %} --type {{ item.type }}{% endif %}
+      {%- if item.pre_number is defined %} --pre-number {{ item.pre_number }}{% endif %}
+  register: snapper_create_result
+  changed_when: true
+  failed_when: >
+    config_exists_for_snapshot.rc == 0 and
+    snapper_create_result.rc != 0
+  loop: "{{ snapper_snapshots }}"
+  loop_control:
+    label: "{{ item.description | default('snapshot') }}"
+  when:
+    - snapper_snapshots | length > 0
+    - config_exists_for_snapshot.rc == 0
+  tags:
+    - snapper
+    - snapper_snapshots
+
+- name: List snapshots before deletion to validate existence
+  ansible.builtin.command:
+    cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      list --columns number
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  register: snapshot_list_for_delete
+  loop: "{{ snapper_snapshots_delete }}"
+  loop_control:
+    label: "{{ item.number }}"
+  when: snapper_snapshots_delete | length > 0
+  tags:
+    - snapper
+    - snapper_snapshots
+
+- name: Delete snapshots
+  ansible.builtin.command:
+    cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      delete {{ item.number }}
+  register: snapper_delete_result
+  changed_when: true
+  failed_when: >
+    (item.number | string) in (snapshot_list_for_delete.stdout | default('')) and
+    snapper_delete_result.rc != 0
+  loop: "{{ snapper_snapshots_delete }}"
+  loop_control:
+    label: "{{ item.number }}"
+  when:
+    - snapper_snapshots_delete | length > 0
+    - (item.number | string) in (snapshot_list_for_delete.stdout | default(''))
+  tags:
+    - snapper
+    - snapper_snapshots
+
+- name: List snapshots
+  ansible.builtin.command:
+    cmd: "{{ _snapper_list_cmd }}"
+  vars:
+    _snapper_list_cmd: >
+      snapper{%- if item.config is defined %} --config {{ item.config }}{% endif %}
+      list{%- if item.type is defined %} --type {{ item.type }}{% endif %}
+      {%- if item.columns is defined %} --columns {{ item.columns | join(',') }}{% endif %}
+  register: snapper_list_result
+  changed_when: false
+  loop: "{{ snapper_snapshots_list | default([{}]) }}"
+  loop_control:
+    label: "{{ item.config | default('default') }}"
+  when: snapper_snapshots_list is defined
+  tags:
+    - snapper
+    - snapper_snapshots
