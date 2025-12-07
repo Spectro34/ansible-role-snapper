@@ -4,14 +4,12 @@ This Ansible role installs and configures [Snapper](http://snapper.io), a snapsh
 
 The role manages Snapper configurations, snapshots, rollbacks, and hooks for Btrfs and LVM thin-provisioned volumes.
 
-**Original Author:** André Lehmann (aisberg@posteo.de)
-
 This role has been enhanced with additional snapshot management features and is dedicated for SLES and openSUSE systems.
 
 ## Supported Distributions
 
 * SLES 16.0 and later
-* openSUSE (all versions)
+* openSUSE
 
 ## Requirements
 
